@@ -10,16 +10,14 @@ function shuffleArray(array) {
 
 async function handleRequest(request, env) {
   let url = new URL(request.url);
-  let isProxy = url.pathname.startsWith(PROXY_PATH);
-  let isTProxy = url.pathname.startsWith(TPROXY_PATH);
-  let urlsStr = isProxy ? url.pathname.replace(PROXY_PATH, "") : url.pathname.replace(TPROXY_PATH, "");
-  let urls = urlsStr.split(',');
+  let isProxy = url.pathname.startsWith(PROXY_PATH) || url.pathname.startsWith(TPROXY_PATH);
+  if (isProxy) {
+    let urlsStr = url.pathname.replace(PROXY_PATH, "").replace(TPROXY_PATH, "");
+    let urls = urlsStr.split(',');
+    shuffleArray(urls);
 
-  shuffleArray(urls);
+    const domain = url.searchParams.get('domain');
 
-  const domain = url.searchParams.get('domain');
-
-  if (isProxy || isTProxy) {
     for (let actualUrlStr of urls) {
       let actualUrl = new URL(actualUrlStr);
       let modifiedRequest = createModifiedRequest(request, actualUrl, domain);
@@ -37,25 +35,19 @@ async function handleRequest(request, env) {
 }
 
 function createModifiedRequest(originalRequest, actualUrl, domain) {
-  let modifiedRequest = new Request(actualUrl, {
-    headers: originalRequest.headers,
+  return new Request(actualUrl, {
+    headers: { ...originalRequest.headers, domain },
     method: originalRequest.method,
     body: originalRequest.body,
     redirect: 'follow'
   });
-
-  if (domain) {
-    modifiedRequest.headers.set('domain', domain);
-  }
-
-  return modifiedRequest;
 }
 
 function createModifiedResponse(originalResponse, actualUrlStr) {
-  let modifiedResponse = new Response(originalResponse.body, originalResponse);
-  modifiedResponse.headers.set('Access-Control-Allow-Origin', '*');
-  modifiedResponse.headers.set('actualUrl', actualUrlStr);
-  return modifiedResponse;
+  return new Response(originalResponse.body, {
+    ...originalResponse,
+    headers: { ...originalResponse.headers, 'Access-Control-Allow-Origin': '*', 'actualUrl': actualUrlStr }
+  });
 }
 
 export default { fetch: handleRequest };
